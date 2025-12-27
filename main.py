@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 import httpx
 from dotenv import load_dotenv
 import jwt
@@ -219,6 +220,22 @@ class FastGPTClient:
         except httpx.HTTPError as e:
             raise HTTPException(status_code=500, detail=f"FastGPT API error: {str(e)}")
 
+# Pydantic models for request validation
+class RegisterRequest(BaseModel):
+    """Request model for user registration"""
+    username: str
+    password: str
+
+class LoginRequest(BaseModel):
+    """Request model for user login"""
+    username: str
+    password: str
+
+class ChatRequest(BaseModel):
+    """Request model for chat"""
+    messages: list
+    chatId: Optional[str] = None
+
 # Initialize services
 fastgpt_client = FastGPTClient(FASTGPT_BASE_URL, FASTGPT_ADMIN_KEY, FASTGPT_CHAT_APP_KEY)
 auth_service = AuthService()
@@ -283,17 +300,17 @@ async def get_user_dataset_id(user_id: int) -> str:
     return result[0]
 
 @app.post("/register")
-async def register(username: str, password: str):
+async def register(request: RegisterRequest):
     """
     User registration endpoint
     Creates a new FastGPT dataset for the user and stores user info in SQLite
     """
     # Hash the password
-    hashed_password = auth_service.hash_password(password)
+    hashed_password = auth_service.hash_password(request.password)
     
     try:
         # Create dataset in FastGPT
-        dataset_id = await fastgpt_client.create_dataset(username)
+        dataset_id = await fastgpt_client.create_dataset(request.username)
         
         # Store user in SQLite
         conn = sqlite3.connect(DATABASE_PATH)
@@ -301,7 +318,7 @@ async def register(username: str, password: str):
         
         cursor.execute(
             "INSERT INTO users (username, password, fastgpt_dataset_id) VALUES (?, ?, ?)",
-            (username, hashed_password, dataset_id)
+            (request.username, hashed_password, dataset_id)
         )
         
         user_id = cursor.lastrowid
@@ -309,7 +326,7 @@ async def register(username: str, password: str):
         conn.close()
         
         # Generate JWT token
-        token = auth_service.create_jwt_token(user_id, username)
+        token = auth_service.create_jwt_token(user_id, request.username)
         
         return {
             "success": True,
@@ -325,19 +342,19 @@ async def register(username: str, password: str):
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @app.post("/login")
-async def login(username: str, password: str):
+async def login(request: LoginRequest):
     """
     User login endpoint
     Returns JWT token for authentication
     """
-    hashed_password = auth_service.hash_password(password)
+    hashed_password = auth_service.hash_password(request.password)
     
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     
     cursor.execute(
         "SELECT id, username, fastgpt_dataset_id FROM users WHERE username = ? AND password = ?",
-        (username, hashed_password)
+        (request.username, hashed_password)
     )
     
     user = cursor.fetchone()
@@ -388,17 +405,15 @@ async def upload_file(
 
 @app.post("/chat")
 async def chat(
-    request: Request,
+    request: ChatRequest,
     current_user: dict = Depends(get_current_user)
 ):
     """
     Chat endpoint with streaming response
     Forwards messages to FastGPT with user's specific dataset
     """
-    # Get request data
-    data = await request.json()
-    messages = data.get("messages", [])
-    chat_id = data.get("chatId", f"chat_{current_user['user_id']}_{datetime.now().timestamp()}")
+    messages = request.messages
+    chat_id = request.chatId or f"chat_{current_user['user_id']}_{datetime.now().timestamp()}"
     
     if not messages:
         raise HTTPException(status_code=400, detail="Messages are required")
