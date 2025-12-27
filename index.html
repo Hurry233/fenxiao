@@ -130,92 +130,206 @@
         <!-- 主应用页面 -->
         <div v-else class="h-screen flex">
             <!-- 侧边栏 -->
-            <div class="w-64 bg-white shadow-lg">
-                <div class="p-6 border-b">
-                    <div class="flex items-center space-x-3">
-                        <i class="fas fa-user-circle text-2xl text-indigo-600"></i>
-                        <div>
-                            <p class="font-semibold text-gray-800">{{ currentUser.username }}</p>
-                            <p class="text-xs text-gray-500">知识库: {{ currentUser.dataset_id }}</p>
+            <div class="w-80 bg-white shadow-xl flex flex-col">
+                <!-- 顶部：用户信息 -->
+                <div class="p-6 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center">
+                            <i class="fas fa-user text-white text-lg"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-semibold text-gray-900 truncate">{{ currentUser.username }}</p>
+                            <p class="text-xs text-gray-600 truncate">知识库: {{ currentUser.dataset_id }}</p>
                         </div>
                     </div>
                 </div>
-                
-                <div class="p-4">
-                    <button 
-                        @click="newChat" 
-                        class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center space-x-2"
-                    >
-                        <i class="fas fa-plus"></i>
-                        <span>新建对话</span>
-                    </button>
-                </div>
-                
-                <div class="p-4 border-t">
-                    <h3 class="text-sm font-medium text-gray-700 mb-3">文件管理</h3>
-                    
-                    <!-- 文件上传区域 -->
-                    <div 
-                        class="upload-area rounded-lg p-4 text-center cursor-pointer mb-4"
-                        @click="$refs.fileInput.click()"
-                        @dragover.prevent="dragover = true"
-                        @dragleave.prevent="dragover = false"
-                        @drop.prevent="handleFileDrop"
-                        :class="{ 'dragover': dragover }"
-                    >
-                        <i class="fas fa-cloud-upload-alt text-2xl text-gray-400 mb-2"></i>
-                        <p class="text-sm text-gray-600">点击或拖拽文件上传</p>
-                        <p class="text-xs text-gray-500 mt-1">支持 PDF, DOC, DOCX, TXT</p>
-                        <input 
-                            ref="fileInput" 
-                            type="file" 
-                            @change="handleFileSelect" 
-                            accept=".pdf,.doc,.docx,.txt"
-                            class="hidden"
-                        >
-                    </div>
-                    
-                    <div v-if="uploadProgress" class="mb-4">
-                        <div class="bg-gray-200 rounded-full h-2">
+
+                <!-- 中间：功能区域（可滚动） -->
+                <div class="flex-1 overflow-y-auto">
+                    <!-- 对话历史区域 -->
+                    <div class="p-4 border-b border-gray-200">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-semibold text-gray-700">
+                                <i class="fas fa-history mr-2 text-indigo-600"></i>
+                                对话历史
+                            </h3>
+                            <button 
+                                @click="newChat" 
+                                class="text-indigo-600 hover:text-indigo-700 text-sm p-1 rounded hover:bg-indigo-50"
+                                title="新建对话"
+                            >
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- 对话列表 -->
+                        <div v-if="chatSessions.length > 0" class="space-y-2 max-h-60 overflow-y-auto">
                             <div 
-                                class="bg-indigo-600 h-2 rounded-full transition-all duration-300"
-                                :style="{ width: uploadProgress + '%' }"
-                            ></div>
+                                v-for="session in chatSessions" 
+                                :key="session.id"
+                                class="group flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 cursor-pointer border border-gray-100"
+                                @click="loadChat(session.id)"
+                            >
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm text-gray-700 truncate">{{ session.title }}</p>
+                                    <p class="text-xs text-gray-500">{{ session.timestamp }}</p>
+                                </div>
+                                <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button 
+                                        @click.stop="deleteChat(session.id)"
+                                        class="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50"
+                                        title="删除对话"
+                                    >
+                                        <i class="fas fa-trash text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <p class="text-xs text-gray-600 mt-1 text-center">{{ uploadStatus }}</p>
+                        <div v-else class="text-center py-4">
+                            <i class="fas fa-comments text-gray-300 mb-2"></i>
+                            <p class="text-xs text-gray-500">暂无对话历史</p>
+                        </div>
                     </div>
-                    
-                    <div v-if="uploadError" class="p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg text-sm mb-4">
-                        <i class="fas fa-exclamation-circle mr-1"></i>
-                        {{ uploadError }}
-                    </div>
-                    
-                    <div v-if="uploadSuccess" class="p-3 bg-green-100 border border-green-300 text-green-700 rounded-lg text-sm mb-4">
-                        <i class="fas fa-check-circle mr-1"></i>
-                        {{ uploadSuccess }}
+
+                    <!-- 文件管理区域 -->
+                    <div class="p-4 border-b border-gray-200">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-3">
+                            <i class="fas fa-folder-open mr-2 text-indigo-600"></i>
+                            文件管理
+                        </h3>
+                        
+                        <!-- 上传区域 -->
+                        <div 
+                            class="upload-area rounded-lg p-4 text-center cursor-pointer mb-3"
+                            @click="$refs.fileInput.click()"
+                            @dragover.prevent="dragover = true"
+                            @dragleave.prevent="dragover = false"
+                            @drop.prevent="handleFileDrop"
+                            :class="{ 'dragover': dragover }"
+                        >
+                            <i class="fas fa-cloud-upload-alt text-xl text-indigo-500 mb-2"></i>
+                            <p class="text-xs font-medium text-gray-600">点击或拖拽上传文件</p>
+                            <p class="text-xs text-gray-500 mt-1">PDF, DOC, DOCX, TXT</p>
+                            <input 
+                                ref="fileInput" 
+                                type="file" 
+                                @change="handleFileSelect" 
+                                accept=".pdf,.doc,.docx,.txt"
+                                class="hidden"
+                            >
+                        </div>
+                        
+                        <!-- 上传进度 -->
+                        <div v-if="uploadProgress" class="mb-3">
+                            <div class="bg-gray-200 rounded-full h-1.5">
+                                <div 
+                                    class="bg-indigo-600 h-1.5 rounded-full transition-all duration-300"
+                                    :style="{ width: uploadProgress + '%' }"
+                                ></div>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-1 text-center">{{ uploadStatus }}</p>
+                        </div>
+                        
+                        <!-- 上传状态 -->
+                        <div v-if="uploadError" class="p-2 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs mb-3">
+                            <i class="fas fa-exclamation-circle mr-1"></i>
+                            {{ uploadError }}
+                        </div>
+                        
+                        <div v-if="uploadSuccess" class="p-2 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs mb-3">
+                            <i class="fas fa-check-circle mr-1"></i>
+                            {{ uploadSuccess }}
+                        </div>
+                        
+                        <!-- 文件列表 -->
+                        <div v-if="uploadedFiles.length > 0" class="space-y-2 max-h-48 overflow-y-auto">
+                            <div 
+                                v-for="file in uploadedFiles" 
+                                :key="file.id"
+                                class="group flex items-center justify-between p-2 bg-gray-50 rounded-lg border border-gray-100"
+                            >
+                                <div class="flex items-center space-x-2 flex-1 min-w-0">
+                                    <i :class="getFileIcon(file.name)" class="text-indigo-600 text-sm"></i>
+                                    <span class="text-xs text-gray-700 truncate">{{ file.name }}</span>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <span class="text-xs text-gray-500">{{ formatFileSize(file.size) }}</span>
+                                    <button 
+                                        @click="deleteFile(file.id)"
+                                        class="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="删除文件"
+                                    >
+                                        <i class="fas fa-trash text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-else class="text-center py-3">
+                            <i class="fas fa-file text-gray-300 mb-1"></i>
+                            <p class="text-xs text-gray-500">暂无上传文件</p>
+                        </div>
                     </div>
                 </div>
-                
-                <div class="absolute bottom-0 left-0 right-0 p-4 border-t bg-white">
-                    <button 
-                        @click="logout" 
-                        class="w-full text-red-600 hover:text-red-700 py-2 px-4 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center space-x-2"
-                    >
-                        <i class="fas fa-sign-out-alt"></i>
-                        <span>退出登录</span>
-                    </button>
+
+                <!-- 底部：账户信息（固定在底部） -->
+                <div class="border-t border-gray-200 bg-gray-50 p-4">
+                    <div class="group flex items-center justify-between p-2 rounded-lg hover:bg-gray-100 cursor-pointer">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center">
+                                <i class="fas fa-user text-white text-sm"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-gray-900 truncate">{{ currentUser.username }}</p>
+                                <p class="text-xs text-gray-600 truncate">在线</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                                @click="logout" 
+                                class="text-gray-500 hover:text-red-600 p-2 rounded hover:bg-red-50"
+                                title="退出登录"
+                            >
+                                <i class="fas fa-sign-out-alt text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             
             <!-- 聊天区域 -->
             <div class="flex-1 flex flex-col bg-gray-100">
                 <!-- 聊天头部 -->
-                <div class="bg-white shadow-sm px-6 py-4">
-                    <h2 class="text-xl font-semibold text-gray-800">
-                        <i class="fas fa-comments mr-2 text-indigo-600"></i>
-                        AI 知识库助手
-                    </h2>
-                    <p class="text-sm text-gray-600 mt-1">您的私有知识库: {{ currentUser.username }}_KB</p>
+                <div class="bg-white shadow-sm px-6 py-4 border-b border-gray-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-xl font-semibold text-gray-800">
+                                <i class="fas fa-comments mr-2 text-indigo-600"></i>
+                                AI 知识库助手
+                            </h2>
+                            <p class="text-sm text-gray-600 mt-1">您的私有知识库: {{ currentUser.username }}_KB</p>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="px-3 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                <i class="fas fa-circle text-xs mr-1"></i>
+                                在线
+                            </span>
+                        </div>
+                    </div>
+                </div> 
+                
+                <!-- 对话历史面包屑 -->
+                <div v-if="messages.length > 0" class="bg-white px-6 py-2 border-b border-gray-100">
+                    <div class="flex items-center text-sm text-gray-500">
+                        <i class="fas fa-comment-dots mr-2 text-indigo-500"></i>
+                        <span>当前对话: {{ messages.length }} 条消息</span>
+                        <button 
+                            @click="newChat" 
+                            class="ml-4 text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                        >
+                            <i class="fas fa-plus mr-1"></i>
+                            新建对话
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- 聊天消息区域 -->
@@ -322,9 +436,39 @@
                 const messages = ref([]);
                 const chatContainer = ref(null);
                 const fileInput = ref(null);
-
-                // API 基础配置
+                
+                // 对话历史
+                const chatSessions = ref([]);
+                
+                // 上传的文件列表
+                const uploadedFiles = ref([
+                    // 示例数据，实际应从后端获取
+                    { id: 1, name: '示例文档.pdf', size: 1024000, uploadTime: '2024-01-01 10:00' },
+                    { id: 2, name: '会议记录.docx', size: 512000, uploadTime: '2024-01-02 14:30' }
+                ]);
+                
+                // API基础配置
                 const API_BASE_URL = 'http://localhost:8000';
+
+                // 工具函数
+                function getFileIcon(fileName) {
+                    const ext = fileName.split('.').pop().toLowerCase();
+                    switch (ext) {
+                        case 'pdf': return 'fas fa-file-pdf text-red-500';
+                        case 'doc':
+                        case 'docx': return 'fas fa-file-word text-blue-600';
+                        case 'txt': return 'fas fa-file-alt text-gray-600';
+                        default: return 'fas fa-file text-gray-400';
+                    }
+                }
+
+                function formatFileSize(bytes) {
+                    if (bytes === 0) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                }
                 
                 // 初始化
                 onMounted(() => {
@@ -470,7 +614,66 @@
 
                 // 新建对话
                 function newChat() {
+                    // 保存当前对话到历史
+                    if (messages.value.length > 0) {
+                        const timestamp = new Date().toLocaleString();
+                        const firstMessage = messages.value[0].content.substring(0, 30) + '...';
+                        chatSessions.value.unshift({
+                            id: Date.now(),
+                            title: firstMessage || '新对话',
+                            timestamp: timestamp,
+                            messages: [...messages.value]
+                        });
+                    }
+                    // 清空当前对话
                     messages.value = [];
+                    
+                    // 保存到localStorage
+                    saveChatHistory();
+                }
+
+                // 加载对话历史
+                function loadChat(sessionId) {
+                    const session = chatSessions.value.find(s => s.id === sessionId);
+                    if (session) {
+                        messages.value = [...session.messages];
+                    }
+                    
+                    // 滚动到底部
+                    nextTick(() => {
+                        if (chatContainer.value) {
+                            chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                        }
+                    });
+                }
+
+                // 删除对话会话
+                function deleteChat(sessionId) {
+                    if (confirm('确定要删除这个对话吗？')) {
+                        chatSessions.value = chatSessions.value.filter(s => s.id !== sessionId);
+                        saveChatHistory();
+                    }
+                }
+
+                // 保存对话历史到localStorage
+                function saveChatHistory() {
+                    if (currentUser.value) {
+                        const key = `chat_history_${currentUser.value.id}`;
+                        localStorage.setItem(key, JSON.stringify(chatSessions.value));
+                    }
+                }
+
+                // 从localStorage加载对话历史
+                function loadChatHistory() {
+                    if (currentUser.value) {
+                        const key = `chat_history_${currentUser.value.id}`;
+                        const saved = localStorage.getItem(key);
+                        if (saved) {
+                            chatSessions.value = JSON.parse(saved);
+                        } else {
+                            chatSessions.value = [];
+                        }
+                    }
                 }
 
                 // 发送消息
@@ -582,6 +785,36 @@
                     }
                 }
 
+                // 删除文件
+                async function deleteFile(fileId) {
+                    if (confirm('确定要删除这个文件吗？')) {
+                        try {
+                            // TODO: 调用后端删除API
+                            // const token = localStorage.getItem('token');
+                            // await fetch(`${API_BASE_URL}/files/${fileId}`, {
+                            //     method: 'DELETE',
+                            //     headers: { 'Authorization': `Bearer ${token}` }
+                            // });
+                            
+                            // 从本地列表中移除
+                            uploadedFiles.value = uploadedFiles.value.filter(f => f.id !== fileId);
+                            
+                            // 显示成功消息
+                            uploadSuccess.value = '文件删除成功';
+                            setTimeout(() => {
+                                uploadSuccess.value = '';
+                            }, 3000);
+                            
+                        } catch (error) {
+                            console.error('删除文件失败:', error);
+                            uploadError.value = '删除文件失败，请稍后重试';
+                            setTimeout(() => {
+                                uploadError.value = '';
+                            }, 5000);
+                        }
+                    }
+                }
+
                 // 上传文件
                 async function uploadFile(file) {
                     uploadProgress.value = 0;
@@ -671,10 +904,16 @@
                     authForm,
                     userInput,
                     messages,
+                    chatSessions,  // 对话历史
+                    uploadedFiles, // 上传的文件列表
                     
                     // 引用
                     chatContainer,
                     fileInput,
+                    
+                    // 工具函数
+                    getFileIcon,
+                    formatFileSize,
                     
                     // 方法
                     toggleAuthMode,
@@ -682,9 +921,14 @@
                     handleLogin,
                     logout,
                     newChat,
+                    loadChat,
+                    deleteChat,
+                    saveChatHistory,
+                    loadChatHistory,
                     sendMessage,
                     handleFileSelect,
-                    handleFileDrop
+                    handleFileDrop,
+                    deleteFile
                 };
             }
         }).mount('#app');

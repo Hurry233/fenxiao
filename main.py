@@ -3,6 +3,7 @@ import json
 import asyncio
 import sqlite3
 import hashlib
+import uuid
 from typing import Optional
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
@@ -44,7 +45,7 @@ if not FASTGPT_ADMIN_KEY or not FASTGPT_CHAT_APP_KEY:
 DATABASE_PATH = "users.db"
 
 def init_db():
-    """Initialize SQLite database with users table"""
+    """Initialize SQLite database with users and files tables"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     
@@ -57,6 +58,24 @@ def init_db():
             fastgpt_dataset_id TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
+    """)
+    
+    # Create files table if not exists
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            filename TEXT NOT NULL,
+            file_size INTEGER NOT NULL,
+            fastgpt_file_id TEXT,
+            upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+    """)
+    
+    # Create index for faster queries
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_files_user_id ON files (user_id)
     """)
     
     conn.commit()
@@ -235,6 +254,14 @@ class ChatRequest(BaseModel):
     """Request model for chat"""
     messages: list
     chatId: Optional[str] = None
+
+class FileInfo(BaseModel):
+    """Response model for file information"""
+    id: int
+    name: str
+    size: int
+    upload_time: str
+    fastgpt_file_id: Optional[str]
 
 # Initialize services
 fastgpt_client = FastGPTClient(FASTGPT_BASE_URL, FASTGPT_ADMIN_KEY, FASTGPT_CHAT_APP_KEY)
