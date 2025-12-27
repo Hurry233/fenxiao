@@ -8,9 +8,10 @@ from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
 import httpx
 from dotenv import load_dotenv
 import jwt
@@ -239,6 +240,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static files (index.html) at root
+# Mount static files for frontend
+app.mount("/static", StaticFiles(directory="."), name="static")
+
+@app.get("/")
+async def serve_frontend():
+    """Serve the frontend index.html file at root path"""
+    if os.path.exists("index.html"):
+        return FileResponse("index.html")
+    else:
+        return {"message": "Multi-User AI Knowledge Base API is running", "frontend": "index.html not found"}
+
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     """
