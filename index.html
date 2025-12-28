@@ -1105,6 +1105,132 @@
                 };
             }
         }).mount('#app');
-    </script>
+        
+        // Vue挂载后的验证
+        console.log('✅ Vue app mounted successfully');
+        console.log('Vue version:', Vue.version);
+        console.log('App element exists:', !!document.getElementById('app'));
+        
+    } catch (error) {
+        console.error('❌ Vue mount failed:', error);
+        alert('Vue应用初始化失败: ' + error.message);
+    }
+    
+</script>
+
+<!-- 错误处理脚本 -->
+<script>
+    // 全局错误处理
+    window.addEventListener('error', function(e) {
+        console.error('Global error:', e.error);
+        console.error('Error message:', e.message);
+        console.error('Error file:', e.filename);
+        console.error('Error line:', e.lineno);
+        
+        // 显示错误信息
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = 'position:fixed;top:20px;left:20px;right:20px;background:#f44336;color:white;padding:15px;z-index:9999;border-radius:8px;font-family:monospace;font-size:12px;';
+        errorDiv.innerHTML = `
+            <strong>❌ 应用初始化失败</strong><br>
+            错误: ${e.message || 'Unknown error'}<br>
+            文件: ${e.filename || 'Unknown'}<br>
+            行号: ${e.lineno || 'Unknown'}
+        `;
+        document.body.appendChild(errorDiv);
+        
+        // 5秒后移除
+        setTimeout(() => {
+            if (errorDiv.parentNode) {
+                errorDiv.parentNode.removeChild(errorDiv);
+            }
+        }, 5000);
+    });
+    
+    // 资源加载错误处理
+    window.addEventListener('DOMContentLoaded', function() {
+        console.log('DOMContentLoaded fired');
+        
+        // 检查Vue是否加载
+        setTimeout(() => {
+            if (typeof Vue === 'undefined') {
+                alert('❌ Vue.js加载失败！请检查网络连接和CDN链接。应用将无法运行。');
+            } else {
+                console.log('✅ Vue.js loaded successfully');
+            }
+            
+            // 检查#app元素是否存在
+            if (!document.getElementById('app')) {
+                alert('❌ #app元素未找到！Vue应用无法挂载。');
+            } else {
+                console.log('✅ #app element found');
+            }
+        }, 1000);
+    });
+</script>
+
+<script>
+// Vue挂载验证脚本 - 增强版
+(function() {
+    console.log('Vue mount verification running...');
+
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    function checkVueMount() {
+        attempts++;
+        const app = document.getElementById('app');
+
+        // 检查Vue是否挂载
+        if (app && app.__vue_app__) {
+            console.log('✅ Vue app successfully mounted on attempt', attempts);
+            console.log('Vue app instance:', app.__vue_app__);
+
+            // 验证authError是否被正确处理
+            const vueApp = app.__vue_app__;
+            if (vueApp._instance && vueApp._instance.proxy) {
+                const vm = vueApp._instance.proxy;
+                console.log('Vue instance state:', {
+                    authError: vm.authError,
+                    currentUser: vm.currentUser,
+                    isMounted: vm.isMounted
+                });
+
+                // 检查是否有模板语法残留
+                const authErrorDiv = app.querySelector('[v-if="authError"]');
+                if (authErrorDiv && authErrorDiv.textContent.includes('{{')) {
+                    console.error('❌ Template syntax found in rendered HTML:', authErrorDiv.textContent);
+                }
+            }
+
+            return true;
+        }
+
+        if (attempts >= maxAttempts) {
+            console.error('❌ Vue app failed to mount after', maxAttempts, 'attempts');
+
+            // 诊断信息
+            console.error('Vue loaded:', typeof Vue !== 'undefined');
+            console.error('#app element exists:', !!document.getElementById('app'));
+
+            // 创建一个诊断报告
+            const report = {
+                vueLoaded: typeof Vue !== 'undefined',
+                appElementExists: !!document.getElementById('app'),
+                windowError: window.lastVueError || 'none',
+                mountAttempts: attempts
+            };
+
+            alert('Vue应用挂载超时\n\n诊断信息:\n' + JSON.stringify(report, null, 2));
+            return false;
+        }
+
+        setTimeout(checkVueMount, 500);
+    }
+
+    // 延迟检查，确保Vue有足够时间挂载
+    setTimeout(checkVueMount, 500);
+})();
+</script>
+
 </body>
 </html>
