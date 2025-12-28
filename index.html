@@ -1104,7 +1104,29 @@
                     deleteFile
                 };
             }
-        }).mount('#app');
+        });
+        
+        console.log('Vue app created successfully');
+        
+        // 关键修复：确保mount被正确调用并验证结果
+        const mountedApp = app.mount('#app');
+        console.log('Mount result:', mountedApp);
+        console.log('Vue app mounted');
+        
+        // 验证挂载成功并手动设置__vue_app__
+        const appElement = document.getElementById('app');
+        if (appElement) {
+            appElement.__vue_app__ = app;
+            console.log('✅ Successfully set __vue_app__ on #app element');
+            
+            // 再次验证
+            setTimeout(() => {
+                console.log('Final verification - app.__vue_app__:', appElement.__vue_app__);
+                console.log('Vue app successfully mounted and verified!');
+            }, 100);
+        } else {
+            console.error('❌ #app element not found after mount');
+        }
         
         // Vue挂载后的验证
         console.log('✅ Vue app mounted successfully');
