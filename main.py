@@ -238,6 +238,33 @@ class FastGPTClient:
                             
         except httpx.HTTPError as e:
             raise HTTPException(status_code=500, detail=f"FastGPT API error: {str(e)}")
+    
+    async def delete_file_from_dataset(self, collection_ids: list[str]) -> dict:
+        """
+        Delete files from FastGPT dataset
+        """
+        url = f"{self.base_url}/api/core/dataset/collection/delete"
+        headers = {
+            "Authorization": f"Bearer {self.admin_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "collectionIds": collection_ids
+        }
+        
+        try:
+            response = await self.client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            
+            result = response.json()
+            if result.get("code") != 200:
+                raise HTTPException(status_code=500, detail=f"Failed to delete file: {result.get('message')}")
+            
+            return result
+            
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=500, detail=f"FastGPT API error: {str(e)}")
 
 # Pydantic models for request validation
 class RegisterRequest(BaseModel):
@@ -262,6 +289,10 @@ class FileInfo(BaseModel):
     size: int
     upload_time: str
     fastgpt_file_id: Optional[str]
+
+class DeleteFileRequest(BaseModel):
+    """Request model for deleting files"""
+    collectionIds: list[str]  # FastGPT使用collectionIds而不是fileIds
 
 # Initialize services
 fastgpt_client = FastGPTClient(FASTGPT_BASE_URL, FASTGPT_ADMIN_KEY, FASTGPT_CHAT_APP_KEY)
@@ -429,6 +460,96 @@ async def upload_file(
         "filename": file.filename,
         "fastgpt_response": result
     }
+
+@app.delete("/files/{file_id}")
+async def delete_file(
+    file_id: int,
+    request: DeleteFileRequest,  # collectionIds needed for FastGPT
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Delete a file from user's dataset and database
+    """
+    try:
+        # Get user's dataset ID and verify file belongs to user
+        dataset_id = await get_user_dataset_id(current_user["user_id"])
+        
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        # Verify file belongs to user
+        cursor.execute(
+            "SELECT fastgpt_file_id FROM files WHERE id = ? AND user_id = ?",
+            (file_id, current_user["user_id"])
+        )
+        
+        file_info = cursor.fetchone()
+        if not file_info:
+            conn.close()
+            raise HTTPException(status_code=404, detail="File not found or access denied")
+        
+        fastgpt_file_id = file_info[0]
+        
+        # Delete from FastGPT
+        if fastgpt_file_id and request.collectionIds:
+            await fastgpt_client.delete_file_from_dataset(request.collectionIds)
+        
+        # Delete from database
+        cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "message": "File deleted successfully",
+            "file_id": file_id,
+            "dataset_id": dataset_id
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+
+@app.get("/files")
+async def list_files(
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    List all files belonging to the current user
+    """
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            """
+            SELECT id, filename, file_size, upload_time, fastgpt_file_id 
+            FROM files 
+            WHERE user_id = ? 
+            ORDER BY upload_time DESC
+            """,
+            (current_user["user_id"],)
+        )
+        
+        files = cursor.fetchall()
+        conn.close()
+        
+        file_list = []
+        for file in files:
+            file_list.append({
+                "id": file[0],
+                "name": file[1],
+                "size": file[2],
+                "upload_time": file[3],
+                "fastgpt_file_id": file[4]
+            })
+        
+        return {
+            "success": True,
+            "files": file_list
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list files: {str(e)}")
 
 @app.post("/chat")
 async def chat(

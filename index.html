@@ -14,6 +14,19 @@
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- Markdown Renderer -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- Clipboard.js for copy functionality -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.11/clipboard.min.js"></script>
+    
+    <!-- Highlight.js for code highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/bash.min.js"></script>
+    
     <style>
         .typing-animation {
             animation: typing 0.5s steps(40, end);
@@ -61,6 +74,134 @@
         
         .scroll-smooth {
             scroll-behavior: smooth;
+        }
+        
+        /* Markdown Styles */
+        .markdown-content {
+            line-height: 1.6;
+        }
+        
+        .markdown-content h1,
+        .markdown-content h2,
+        .markdown-content h3,
+        .markdown-content h4,
+        .markdown-content h5,
+        .markdown-content h6 {
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+            font-weight: 600;
+        }
+        
+        .markdown-content h1 { font-size: 1.5em; }
+        .markdown-content h2 { font-size: 1.25em; }
+        .markdown-content h3 { font-size: 1.1em; }
+        
+        .markdown-content p {
+            margin-bottom: 0.75em;
+        }
+        
+        .markdown-content ul,
+        .markdown-content ol {
+            margin-left: 1.5em;
+            margin-bottom: 0.75em;
+        }
+        
+        .markdown-content li {
+            margin-bottom: 0.25em;
+        }
+        
+        .markdown-content code {
+            background: #f3f4f6;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        .markdown-content pre {
+            background: #f8f9fa;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1em;
+            margin: 1em 0;
+            overflow-x: auto;
+            position: relative;
+        }
+        
+        .markdown-content pre code {
+            background: none;
+            padding: 0;
+            border-radius: 0;
+        }
+        
+        .markdown-content blockquote {
+            border-left: 4px solid #e5e7eb;
+            padding-left: 1em;
+            margin: 1em 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+        
+        .markdown-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+        }
+        
+        .markdown-content th,
+        .markdown-content td {
+            border: 1px solid #e5e7eb;
+            padding: 0.5em;
+            text-align: left;
+        }
+        
+        .markdown-content th {
+            background: #f9fafb;
+            font-weight: 600;
+        }
+        
+        .markdown-content a {
+            color: #2563eb;
+            text-decoration: underline;
+        }
+        
+        .markdown-content a:hover {
+            color: #1d4ed8;
+        }
+        
+        .markdown-content img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin: 1em 0;
+        }
+        
+        /* Copy button for code blocks */
+        .copy-button {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #6366f1;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        pre:hover .copy-button {
+            opacity: 1;
+        }
+        
+        .copy-button:hover {
+            background: #4f46e5;
+        }
+        
+        .copy-success {
+            background: #10b981 !important;
         }
     </style>
 </head>
@@ -789,21 +930,45 @@
                 async function deleteFile(fileId) {
                     if (confirm('确定要删除这个文件吗？')) {
                         try {
-                            // TODO: 调用后端删除API
-                            // const token = localStorage.getItem('token');
-                            // await fetch(`${API_BASE_URL}/files/${fileId}`, {
-                            //     method: 'DELETE',
-                            //     headers: { 'Authorization': `Bearer ${token}` }
-                            // });
+                            const token = localStorage.getItem('token');
+                            const file = uploadedFiles.value.find(f => f.id === fileId);
                             
-                            // 从本地列表中移除
-                            uploadedFiles.value = uploadedFiles.value.filter(f => f.id !== fileId);
+                            if (!file || !file.fastgpt_file_id) {
+                                // 仅从本地列表中移除
+                                uploadedFiles.value = uploadedFiles.value.filter(f => f.id !== fileId);
+                                uploadSuccess.value = '文件删除成功';
+                                setTimeout(() => {
+                                    uploadSuccess.value = '';
+                                }, 3000);
+                                return;
+                            }
                             
-                            // 显示成功消息
-                            uploadSuccess.value = '文件删除成功';
-                            setTimeout(() => {
-                                uploadSuccess.value = '';
-                            }, 3000);
+                            // 调用后端删除API
+                            const response = await fetch(`${API_BASE_URL}/files/${fileId}`, {
+                                method: 'DELETE',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    collectionIds: [file.fastgpt_file_id]  # FastGPT需要collectionIds
+                                })
+                            });
+                            
+                            if (response.ok) {
+                                // 从本地列表中移除
+                                uploadedFiles.value = uploadedFiles.value.filter(f => f.id !== fileId);
+                                uploadSuccess.value = '文件删除成功';
+                                setTimeout(() => {
+                                    uploadSuccess.value = '';
+                                }, 3000);
+                            } else {
+                                const error = await response.json();
+                                uploadError.value = error.detail || '删除文件失败';
+                                setTimeout(() => {
+                                    uploadError.value = '';
+                                }, 5000);
+                            }
                             
                         } catch (error) {
                             console.error('删除文件失败:', error);
@@ -858,6 +1023,14 @@
                                 uploadSuccess.value = `文件 "${file.name}" 上传成功！`;
                                 uploadStatus.value = '上传成功';
                                 uploadProgress.value = 100;
+                                
+                                // 添加文件到列表
+                                uploadedFiles.value.unshift({
+                                    id: Date.now(),
+                                    name: file.name,
+                                    size: file.size,
+                                    uploadTime: new Date().toLocaleString()
+                                });
                                 
                                 // 3秒后清除成功消息
                                 setTimeout(() => {
